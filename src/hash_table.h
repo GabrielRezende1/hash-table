@@ -29,6 +29,20 @@ void ht_insert(ht_hash_table *ht, char *key, char *value)
 
 char *ht_search(ht_hash_table *ht, const char *key)
 {
+    int index = ht_get_hash(key, ht->size, 0);
+    ht_item *item = ht->items[index];
+    int i = 1;
+    while (item != NULL)
+    {
+        if (strcmp(item->key, key) == 0)
+        {
+            return item->value;
+        }
+        index = ht_get_hash(key, ht->size, i);
+        item = ht->items[index];
+        i++;
+    }
+    
 }
 
 void ht_delete(ht_hash_table *ht, const char *key)
