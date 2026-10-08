@@ -3,7 +3,9 @@
 #include <math.h>
 
 #include "hash_table.h"
+#include "prime.h"
 
+const int HT_INITIAL_BASE_SIZE = 50;
 const int HT_PRIME_1 = 151;
 const int HT_PRIME_2 = 163;
 static ht_item HT_DELETED_ITEM = {NULL, NULL};
@@ -16,14 +18,21 @@ static ht_item *ht_new_item(const char *k, const char *v)
     return i;
 }
 
-ht_hash_table *ht_new()
+static ht_hash_table *ht_new_sized(const int base_size)
 {
     ht_hash_table *ht = malloc(sizeof(ht_hash_table));
+    ht->size = base_size;
 
-    ht->size = 53;
+    ht->size = next_prime(ht->size);
+
     ht->count = 0;
     ht->items = calloc((size_t)ht->size, sizeof(ht_item *));
     return ht;
+}
+
+ht_hash_table *ht_new()
+{
+    return ht_new_sized(HT_INITIAL_BASE_SIZE);
 }
 
 static void ht_del_item(ht_item *i)
@@ -68,6 +77,12 @@ static int ht_get_hash(const char *s, const int num_buckets, const int attempt)
 
 void ht_insert(ht_hash_table *ht, char *key, char *value)
 {
+    const int load = ht->count * 100 / ht->size;
+    if (load > 70)
+    {
+        ht_resize_up(ht);
+    }
+
     ht_item *item = ht_new_item(key, value);
     int index = ht_get_hash(item->key, ht->size, 0);
     ht_item *cur_item = ht->items[index];
@@ -113,6 +128,12 @@ char *ht_search(ht_hash_table *ht, const char *key)
 
 void ht_delete(ht_hash_table *ht, const char *key)
 {
+    const int load = ht->count * 100 / 2;
+    if (load < 10)
+    {
+        ht_resize_down(ht);
+    }
+
     int index = ht_get_hash(key, ht->size, 0);
     ht_item *item = ht->items[index];
     int i = 1;
@@ -131,4 +152,47 @@ void ht_delete(ht_hash_table *ht, const char *key)
         i++;
     }
     ht->count--;
+}
+
+static void ht_resize(ht_hash_table *ht, const int base_size)
+{
+    if (base_size < HT_INITIAL_BASE_SIZE)
+    {
+        return;
+    }
+    ht_hash_table *new_ht = ht_new_sized(base_size);
+    for (int i = 0; i < ht->size; i++)
+    {
+        ht_item *item = ht->items[i];
+        if (item != NULL && item != &HT_DELETED_ITEM)
+        {
+            ht_insert(new_ht, item->key, item->value);
+        }
+    }
+
+    ht->size = new_ht->size;
+    ht->count = new_ht->count;
+
+    // To delete new_ht, we give it ht's size and items
+    const int tmp_size = ht->size;
+    ht->size = new_ht->size;
+    new_ht->size = tmp_size;
+
+    ht_item **tmp_items = ht->items;
+    ht->items = new_ht->items;
+    new_ht->items = tmp_items;
+
+    ht_del_hash_table(new_ht);
+}
+
+static void ht_resize_up(ht_hash_table *ht)
+{
+    const int new_size = ht->size * 2;
+    ht_resize(ht, new_size);
+}
+
+static void ht_resize_down(ht_hash_table *ht)
+{
+    const int new_size = ht->size / 2;
+    ht_resize(ht, new_size);
 }
